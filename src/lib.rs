@@ -102,10 +102,10 @@ pub fn uncompress_all(file: &mut File, output_directory: &Path, overwrite: bool)
 		let start = reader.stream_position()?;
 		let mut decoder = GzDecoder::new(reader);
 		let filename: String = if let Some(header) = decoder.header() {
-			header
-				.filename()
-				.map(|bytes| String::from_utf8_lossy(bytes).into())
-				.unwrap_or_else(|| format!("file_{}", counter))
+			header.filename().map_or_else(
+				|| format!("file_{}", counter),
+				|bytes| String::from_utf8_lossy(bytes).into(),
+			)
 		} else {
 			let mut reader = decoder.into_inner();
 			let _ = reader.seek(SeekFrom::Start(start));
@@ -132,10 +132,10 @@ pub fn list_contents(file: &mut File) -> Result<Vec<FileInfo>> {
 		let start = reader.stream_position()?;
 		let mut decoder = GzDecoder::new(reader);
 		let filename: String = if let Some(header) = decoder.header() {
-			header
-				.filename()
-				.map(|bytes| String::from_utf8_lossy(bytes).into())
-				.unwrap_or_else(|| format!("file_{}", files.len() + 1))
+			header.filename().map_or_else(
+				|| format!("file_{}", files.len() + 1),
+				|bytes| String::from_utf8_lossy(bytes).into(),
+			)
 		} else {
 			let mut reader = decoder.into_inner();
 			let _ = reader.seek(SeekFrom::Start(start));
@@ -144,9 +144,10 @@ pub fn list_contents(file: &mut File) -> Result<Vec<FileInfo>> {
 		while match decoder.read(&mut *buffer) {
 			Ok(0) => false,
 			Ok(_) => true,
-			Err(e) => match e.kind() {
-				ErrorKind::WouldBlock => true,
-				_ => {
+			Err(e) => {
+				if e.kind() == ErrorKind::WouldBlock {
+					true
+				} else {
 					files.push(FileInfo {
 						filename: format!("{}~corrupted", filename),
 						start,
@@ -154,7 +155,7 @@ pub fn list_contents(file: &mut File) -> Result<Vec<FileInfo>> {
 					});
 					return Ok(files);
 				}
-			},
+			}
 		} {
 			// skip contents
 		}
