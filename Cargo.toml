@@ -3,6 +3,7 @@ name = "gunzip-split"
 version = "0.1.0"
 edition = "2021"
 authors = ["Christoph Grenz <christophg+gitorious@grenz-bonn.de>"]
+license = "LGPL-2.1-or-later"
 
 [dependencies]
 clap = { version = "3.0", features = ["std", "derive"], default-features = false }

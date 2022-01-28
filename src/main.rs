@@ -1,3 +1,5 @@
+//! `gunzip-split` utility to decompress concatenated gzip files back into separate files.
+
 use clap::Parser;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Seek};

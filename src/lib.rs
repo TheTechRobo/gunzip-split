@@ -1,3 +1,7 @@
+//! Splits concatenated gzip files and decompresses them separately
+//!
+//! This crate contains the main functionality of the `gunzip-split` utility.
+
 use flate2::bufread::GzDecoder;
 use std::borrow::Cow;
 use std::fs::{create_dir, rename, File};
