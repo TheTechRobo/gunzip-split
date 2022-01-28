@@ -25,7 +25,7 @@ Splitting/deconcatenating and listing the filenames of contained compressed file
 
 ## License
 
-Licensed under GNU Lesser General Public License, Version 2.1 or any later version ([LICENSE](LICENSE).
+Licensed under GNU Lesser General Public License, Version 2.1 or any later version ([LICENSE](LICENSE)).
 
 ### Contribution
 
