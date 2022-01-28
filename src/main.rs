@@ -1,7 +1,7 @@
+use clap::Parser;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Seek};
 use std::path::PathBuf;
-use clap::Parser;
 use unconcat_gz::{escape_cc, list_contents, uncompress_all, unconcatenate_files, Progress};
 
 #[derive(Parser)]
@@ -10,9 +10,17 @@ struct Opt {
 	#[clap(short, long)]
 	force: bool,
 
+	/// Decompressing all files (default)
+	#[clap(short, long, group = "input")]
+	_decompress: bool,
+
 	/// Split into multiple .gz files instead of decompressing
-	#[clap(short, long)]
+	#[clap(short, long, group = "input")]
 	split_only: bool,
+
+	/// List all contained files instead of decompressing
+	#[clap(short, long, group = "input")]
+	list_only: bool,
 
 	/// Output directory for deconcatenated files
 	#[clap(short, long, parse(from_os_str))]
@@ -30,7 +38,13 @@ fn process(opt: Opt) -> std::io::Result<()> {
 
 	let mut gzfile = File::open(&input)?;
 
-	if opt.split_only {
+	if opt.list_only {
+		// Uncompress to /dev/null to list of files
+		list_contents(&mut gzfile, |p| match p {
+			Progress::FileBegin { name, .. } => println!("{}", escape_cc(name)),
+			_ => {}
+		})?;
+	} else if opt.split_only {
 		// Uncompress to /dev/null to get a list of all files
 		let files = list_contents(&mut gzfile, |_| {})?;
 
