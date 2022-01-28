@@ -31,17 +31,20 @@ pub enum Progress<'a> {
 	FileDone { end: u64 },
 }
 
+/// Constituent file information
 #[derive(Clone, Debug)]
 pub struct FileInfo {
-	filename: String,
-	start: u64,
-	end: u64,
+	pub filename: String,
+	pub start: u64,
+	pub end: u64,
 }
 
 /// Replace ASCII control characters with REPLACEMENT CHARACTER
 ///
 /// They may upset terminals when used in e.g. a filename or (in the case of NL) confuse users.
 #[doc(hidden)]
+#[must_use]
+#[inline]
 pub fn escape_cc(input: &str) -> Cow<'_, str> {
 	if input.find(|c| ('\0'..'\x1f').contains(&c)).is_some() {
 		input
@@ -150,7 +153,7 @@ pub fn uncompress_one<R: BufRead>(
 
 /// Uncompresses all files from the gzip input
 ///
-/// The passed `decoder` must already be positioned at the start offset.
+/// The passed `file` must be positioned at the beginning of the input.
 ///
 /// # Errors
 /// If this function encounters any form of I/O or other error except interruption by a signal,
@@ -203,6 +206,14 @@ pub fn uncompress_all(
 	Ok(())
 }
 
+/// Lists all files in the input gzip file
+///
+/// # Errors
+/// If this function encounters any form of I/O or other error except interruption by a signal,
+/// an adequate error variant will be returned. The position in `input` is undefined.
+///
+/// Interruption by a signal instead causes `progress_cb` to be called with
+/// [`Progress::ProgressStep`].
 pub fn list_contents(
 	file: &mut File,
 	mut progress_cb: impl FnMut(Progress) -> (),
@@ -264,7 +275,7 @@ pub fn list_contents(
 	Ok(files)
 }
 
-/// Copies one gzip file from the concatenated gzip input
+/// Copies one gzip file described by `info` from the concatenated gzip input
 ///
 /// The filename will be `info.filename` with `.gz` appended. Any `/`, `\`, or NUL byte in
 /// the resulting filename will be replaced with an underscore to prevent directory traversal
@@ -272,8 +283,7 @@ pub fn list_contents(
 ///
 /// # Errors
 /// If this function encounters any form of I/O or other error except interruption by a signal,
-/// an adequate error variant will be returned. The underlying reader will be positioned near
-/// the offset where the error occured.
+/// an adequate error variant will be returned. The position in `input` is undefined.
 ///
 /// Interruption by a signal instead causes `progress_cb` to be called with
 /// [`Progress::ProgressStep`].
@@ -335,6 +345,18 @@ pub fn write_one_file(
 	Ok(())
 }
 
+/// Splits the concatenated gzip input into separate files
+///
+/// After successfully returning, `input` will be positioned at the end of the last file.
+///
+/// # Errors
+/// If this function cannot ensure the existence of the output directory, an error will be returned.
+///
+/// Any form of I/O or other error encountered while extracting one file,
+/// causes `progress_cb` to be called with [`Progress::FileFailed`].
+///
+/// Interruption by a signal instead causes `progress_cb` to be called with
+/// [`Progress::ProgressStep`].
 pub fn unconcatenate_files(
 	input: &mut File,
 	infos: &[FileInfo],

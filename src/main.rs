@@ -2,9 +2,11 @@ use clap::Parser;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Seek};
 use std::path::PathBuf;
-use unconcat_gz::{escape_cc, list_contents, uncompress_all, unconcatenate_files, Progress};
+use gunzip_split::{escape_cc, list_contents, uncompress_all, unconcatenate_files, Progress};
 
 #[derive(Parser)]
+#[clap(version, about, long_about = None)]
+/// Uncompress a concatenated gzip file back into separate files.
 struct Opt {
 	/// Overwrite existing files
 	#[clap(short, long)]
@@ -83,6 +85,7 @@ fn process(opt: Opt) -> std::io::Result<()> {
 	Ok(())
 }
 
+/// Entry point
 fn main() {
 	let opt = Opt::parse();
 	let result = process(opt);

@@ -11,8 +11,13 @@ use libc::{off64_t, sendfile64};
 use std::os::unix::io::AsRawFd;
 
 #[cfg(unix)]
+/// Marker to not use `sendfile` syscall again after it failed
 static SENDFILE_COPY_FAILS: AtomicBool = AtomicBool::new(false);
 
+/// Convert a range into offset and length
+///
+/// A length of `0` is used for "unbounded".
+/// If the range is empty, `None` is returned.
 #[inline]
 fn convert_range(range: impl RangeBounds<u64>) -> Option<(u64, u64)> {
 	let start = match range.start_bound() {
@@ -31,6 +36,10 @@ fn convert_range(range: impl RangeBounds<u64>) -> Option<(u64, u64)> {
 }
 
 #[cfg(unix)]
+/// Native `sendfile`: transfer data between file descriptors in the kernel
+///
+/// Using it for copying from a regular file to another regular file is not
+/// supported everywhere (e.g. on Mac OS X). See [`sendfile_emulated`] for a fallback.
 fn sendfile_native(file: &mut File, offset: u64, length: usize, output: &mut File) -> Result<u64> {
 	let mut offset: off64_t = offset as off64_t;
 
@@ -43,6 +52,9 @@ fn sendfile_native(file: &mut File, offset: u64, length: usize, output: &mut Fil
 	}
 }
 
+/// Replacement `sendfile`: transfer data between file descriptors in userspace
+///
+/// Copies the data in chunks with a read-write loop.
 fn sendfile_emulated(
 	file: &mut File,
 	offset: u64,
@@ -91,6 +103,19 @@ fn sendfile_emulated(
 	Ok(written)
 }
 
+/// Native `sendfile`: transfer data between files
+///
+/// Copies `range` of `file` to the current stream position of `output`.
+///
+/// If not everything could be copied (e.g. when interrupted by a signal) the range that wasn't
+/// copied yet is returned.
+///
+/// Uses the `sendfile` syscall if available and supported for copying between regular files
+/// (unix only) and falls back to a read-write loop.
+///
+/// # Errors
+/// If this function encounters any form of I/O error when no bytes have yet been written,
+/// an adequate error variant will be returned.
 pub fn sendfile(
 	file: &mut File,
 	range: impl RangeBounds<u64>,
@@ -127,7 +152,7 @@ pub fn sendfile(
 				| ErrorKind::PermissionDenied
 				| ErrorKind::TimedOut
 				| ErrorKind::OutOfMemory => return Err(e),
-				// Everything else switches to read+copy for now
+				// Everything else switches to read-write copying for now
 				_ => SENDFILE_COPY_FAILS.store(true, Release),
 			},
 		}
