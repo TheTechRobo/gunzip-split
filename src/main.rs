@@ -1,25 +1,25 @@
 use std::fs::File;
 use std::io::{ErrorKind, Read, Seek};
 use std::path::PathBuf;
-use structopt::StructOpt;
+use clap::Parser;
 use unconcat_gz::{list_contents, uncompress_all, unconcatenate_files, Progress};
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Opt {
 	/// Overwrite existing files
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	force: bool,
 
 	/// Split into multiple .gz files instead of decompressing
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	split_only: bool,
 
 	/// Output directory for deconcatenated files
-	#[structopt(short, long, parse(from_os_str))]
+	#[clap(short, long, parse(from_os_str))]
 	output_directory: PathBuf,
 
 	/// concatenated gzip input file
-	#[structopt(name = "FILE", parse(from_os_str))]
+	#[clap(name = "FILE", parse(from_os_str))]
 	path: PathBuf,
 }
 
@@ -70,7 +70,7 @@ fn process(opt: Opt) -> std::io::Result<()> {
 }
 
 fn main() {
-	let opt = Opt::from_args();
+	let opt = Opt::parse();
 	let result = process(opt);
 	if let Err(e) = result {
 		if e.kind() == ErrorKind::AlreadyExists {
