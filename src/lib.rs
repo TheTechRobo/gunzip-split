@@ -8,6 +8,29 @@ mod sendfile;
 pub(crate) const CHUNK_SIZE: usize = 2 * 1024 * 1024;
 
 #[derive(Debug)]
+pub enum Progress<'a> {
+	/// Processing of a file starts
+	///
+	/// - `start`: offset in the input file where processing starts
+	/// - `name`: filename (if no metadata is found a dummy name like "file_`counter`" is used)
+	FileBegin { start: u64, name: &'a str },
+	/// Forward progress happened
+	///
+	/// Guarantees for the progress callbacks:
+	/// - passed at least once for every file that could be successfully processed
+	/// - passed shortly after an OS signal interrupted a system call.
+	ProgressStep,
+	/// Processing the current file failed, but this wasn't fatal for the whole operation
+	///
+	/// - `error`: underlying error
+	FileFailed { error: Error },
+	/// Current file was processed successfully
+	///
+	/// - `end`: offset in the input file where processing completed
+	FileDone { end: u64 },
+}
+
+#[derive(Debug)]
 pub struct FileInfo {
 	filename: String,
 	start: u64,
@@ -19,6 +42,7 @@ pub fn uncompress_one<R: BufRead>(
 	output_directory: &Path,
 	filename: &str,
 	overwrite: bool,
+	mut progress_cb: impl FnMut(Progress) -> (),
 ) -> Result<()> {
 	let mut buffer = vec![0; CHUNK_SIZE];
 	let filename = filename.replace(['/', '\0', '\\'], "_");
@@ -30,7 +54,7 @@ pub fn uncompress_one<R: BufRead>(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists (use -f to overwrite)", filename),
+			format!("file {} already exists", filename),
 		));
 	}
 
@@ -46,7 +70,7 @@ pub fn uncompress_one<R: BufRead>(
 					ErrorKind::AlreadyExists => {
 						return Err(Error::new(
 							ErrorKind::AlreadyExists,
-							format!("file {} already exists (use -f to overwrite)", tempfile),
+							format!("file {} already exists", tempfile),
 						))
 					}
 					_ => return Err(e),
@@ -78,6 +102,7 @@ pub fn uncompress_one<R: BufRead>(
 					},
 				};
 				slice = &mut slice[count..];
+				progress_cb(Progress::ProgressStep);
 			}
 		}
 	}
@@ -86,7 +111,7 @@ pub fn uncompress_one<R: BufRead>(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists (use -f to overwrite)", filename),
+			format!("file {} already exists", filename),
 		));
 	}
 	rename(outpath, finalpath)?;
@@ -94,7 +119,12 @@ pub fn uncompress_one<R: BufRead>(
 	Ok(())
 }
 
-pub fn uncompress_all(file: &mut File, output_directory: &Path, overwrite: bool) -> Result<()> {
+pub fn uncompress_all(
+	file: &mut File,
+	output_directory: &Path,
+	overwrite: bool,
+	mut progress_cb: impl FnMut(Progress) -> (),
+) -> Result<()> {
 	let mut reader = BufReader::with_capacity(CHUNK_SIZE * 2, file);
 	let mut counter: u64 = 1;
 
@@ -112,17 +142,31 @@ pub fn uncompress_all(file: &mut File, output_directory: &Path, overwrite: bool)
 			return Ok(());
 		};
 		counter += 1;
-		eprint!("{}: ", &filename);
+		progress_cb(Progress::FileBegin {
+			start,
+			name: &filename,
+		});
 
-		uncompress_one(&mut decoder, output_directory, &filename, overwrite)?;
+		uncompress_one(
+			&mut decoder,
+			output_directory,
+			&filename,
+			overwrite,
+			&mut progress_cb,
+		)?;
 		reader = decoder.into_inner();
 
-		eprintln!("OK.");
+		progress_cb(Progress::FileDone {
+			end: reader.stream_position()?,
+		});
 	}
 	Ok(())
 }
 
-pub fn list_contents(file: &mut File) -> Result<Vec<FileInfo>> {
+pub fn list_contents(
+	file: &mut File,
+	mut progress_cb: impl FnMut(Progress) -> (),
+) -> Result<Vec<FileInfo>> {
 	let length = file.metadata()?.len();
 	let mut reader = BufReader::with_capacity(CHUNK_SIZE * 2, file);
 	let mut buffer = vec![0; CHUNK_SIZE];
@@ -141,11 +185,17 @@ pub fn list_contents(file: &mut File) -> Result<Vec<FileInfo>> {
 			let _ = reader.seek(SeekFrom::Start(start));
 			return Ok(files);
 		};
+
+		progress_cb(Progress::FileBegin {
+			start,
+			name: &filename,
+		});
+
 		while match decoder.read(&mut *buffer) {
 			Ok(0) => false,
 			Ok(_) => true,
 			Err(e) => {
-				if e.kind() == ErrorKind::WouldBlock {
+				if e.kind() == ErrorKind::Interrupted {
 					true
 				} else {
 					files.push(FileInfo {
@@ -153,19 +203,23 @@ pub fn list_contents(file: &mut File) -> Result<Vec<FileInfo>> {
 						start,
 						end: length,
 					});
+					progress_cb(Progress::FileFailed { error: e });
 					return Ok(files);
 				}
 			}
 		} {
+			progress_cb(Progress::ProgressStep);
 			// skip contents
 		}
 
 		reader = decoder.into_inner();
+		let end = reader.stream_position()?;
 		files.push(FileInfo {
 			filename,
 			start,
-			end: reader.stream_position()?,
+			end,
 		});
+		progress_cb(Progress::FileDone { end });
 	}
 	Ok(files)
 }
@@ -175,6 +229,7 @@ pub fn write_one_file(
 	info: &FileInfo,
 	output_directory: &Path,
 	overwrite: bool,
+	mut progress_cb: impl FnMut(Progress) -> (),
 ) -> Result<()> {
 	input.seek(SeekFrom::Start(info.start))?;
 	let filename = format!("{}.gz", info.filename.replace(['/', '\0', '\\'], "_"));
@@ -186,7 +241,7 @@ pub fn write_one_file(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists (use -f to overwrite)", filename),
+			format!("file {} already exists", filename),
 		));
 	}
 
@@ -201,7 +256,7 @@ pub fn write_one_file(
 					ErrorKind::AlreadyExists => {
 						return Err(Error::new(
 							ErrorKind::AlreadyExists,
-							format!("file {} already exists (use -f to overwrite)", tempfile),
+							format!("file {} already exists", tempfile),
 						))
 					}
 					_ => return Err(e),
@@ -210,6 +265,7 @@ pub fn write_one_file(
 		};
 		let mut range = info.start..info.end;
 		while let Some(r) = sendfile::sendfile(input, range, &mut outfile)? {
+			progress_cb(Progress::ProgressStep);
 			range = r;
 		}
 	}
@@ -218,7 +274,7 @@ pub fn write_one_file(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists (use -f to overwrite)", filename),
+			format!("file {} already exists", filename),
 		));
 	}
 	rename(outpath, finalpath)?;
@@ -231,6 +287,7 @@ pub fn unconcatenate_files(
 	infos: &[FileInfo],
 	output_directory: &Path,
 	overwrite: bool,
+	mut progress_cb: impl FnMut(Progress) -> (),
 ) -> Result<()> {
 	// Try to create output directory
 	if let Err(e) = create_dir(output_directory) {
@@ -241,13 +298,17 @@ pub fn unconcatenate_files(
 
 	// Write files
 	for info in infos {
-		eprint!("{}: ", &info.filename);
-		if let Err(e) = write_one_file(input, info, output_directory, overwrite) {
-			eprintln!("ERROR: {}.", e);
+		progress_cb(Progress::FileBegin {
+			start: info.start,
+			name: &info.filename,
+		});
+		if let Err(e) = write_one_file(input, info, output_directory, overwrite, &mut progress_cb) {
+			progress_cb(Progress::FileFailed { error: e });
 		} else {
-			eprintln!("OK.");
+			progress_cb(Progress::FileDone { end: info.end });
 		}
 	}
+
 	// Seek after the last file for correct error position information about corrupted tail data
 	// even if native sendfile was used.
 	let len = infos.len();

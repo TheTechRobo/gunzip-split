@@ -1,8 +1,8 @@
 use std::fs::File;
-use std::io::{Read, Seek};
+use std::io::{ErrorKind, Read, Seek};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use unconcat_gz::{list_contents, uncompress_all, unconcatenate_files};
+use unconcat_gz::{list_contents, uncompress_all, unconcatenate_files, Progress};
 
 #[derive(StructOpt)]
 struct Opt {
@@ -31,10 +31,28 @@ fn process(opt: Opt) -> std::io::Result<()> {
 	let mut gzfile = File::open(&input)?;
 
 	if opt.split_only {
-		let files = list_contents(&mut gzfile)?;
-		unconcatenate_files(&mut gzfile, &files, &outdir, overwrite)?;
+		// Uncompress to /dev/null to get a list of all files
+		let files = list_contents(&mut gzfile, |_| {})?;
+
+		// Split according to the file list
+		unconcatenate_files(&mut gzfile, &files, &outdir, overwrite, |p| match p {
+			Progress::FileBegin { name, .. } => eprint!("{}: ", name),
+			Progress::FileDone { .. } => eprintln!("OK."),
+			Progress::FileFailed { error } => {
+				if error.kind() == ErrorKind::AlreadyExists {
+					eprintln!("ERROR: {} (use -f to overwrite).", error);
+				} else {
+					eprintln!("ERROR: {}.", error);
+				}
+			}
+			_ => {}
+		})?;
 	} else {
-		uncompress_all(&mut gzfile, &outdir, overwrite)?;
+		uncompress_all(&mut gzfile, &outdir, overwrite, |p| match p {
+			Progress::FileBegin { name, .. } => eprint!("{}: ", name),
+			Progress::FileDone { .. } => eprintln!("OK."),
+			_ => {}
+		})?;
 	}
 
 	let mut buf = [0u8; 1];
@@ -55,7 +73,11 @@ fn main() {
 	let opt = Opt::from_args();
 	let result = process(opt);
 	if let Err(e) = result {
-		eprintln!("ERROR: {}", e);
+		if e.kind() == ErrorKind::AlreadyExists {
+			eprintln!("ERROR: {} (use -f to overwrite).", e);
+		} else {
+			eprintln!("ERROR: {}.", e);
+		}
 		eprintln!("Aborted.");
 		std::process::exit(1);
 	}
