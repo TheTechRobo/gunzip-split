@@ -41,6 +41,7 @@ fn convert_range(range: impl RangeBounds<u64>) -> Option<(u64, u64)> {
 /// Using it for copying from a regular file to another regular file is not
 /// supported everywhere (e.g. on Mac OS X). See [`sendfile_emulated`] for a fallback.
 fn sendfile_native(file: &mut File, offset: u64, length: usize, output: &mut File) -> Result<u64> {
+	#[allow(clippy::cast_possible_wrap)]
 	let mut offset: off64_t = offset as off64_t;
 
 	let written = unsafe { sendfile64(output.as_raw_fd(), file.as_raw_fd(), &mut offset, length) };
@@ -48,6 +49,7 @@ fn sendfile_native(file: &mut File, offset: u64, length: usize, output: &mut Fil
 	if written == -1 {
 		Err(Error::last_os_error())
 	} else {
+		#[allow(clippy::cast_sign_loss)]
 		Ok(written as u64)
 	}
 }

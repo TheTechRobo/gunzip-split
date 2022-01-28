@@ -6,11 +6,12 @@ use flate2::bufread::GzDecoder;
 use std::borrow::Cow;
 use std::fs::{create_dir, rename, File};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
+use std::mem::drop;
 use std::path::Path;
 
 mod sendfile;
 
-pub(crate) const CHUNK_SIZE: usize = 1 * 1024 * 1024;
+pub(crate) const CHUNK_SIZE: usize = 1024 * 1024;
 
 #[derive(Debug)]
 pub enum Progress<'a> {
@@ -78,7 +79,7 @@ pub fn uncompress_one<R: BufRead>(
 	output_directory: &Path,
 	filename: &str,
 	overwrite: bool,
-	mut progress_cb: impl FnMut(Progress) -> (),
+	mut progress_cb: impl FnMut(Progress),
 ) -> Result<()> {
 	let mut buffer = vec![0; CHUNK_SIZE];
 	let filename = filename.replace(['/', '\0', '\\'], "_");
@@ -170,7 +171,7 @@ pub fn uncompress_all(
 	file: &mut File,
 	output_directory: &Path,
 	overwrite: bool,
-	mut progress_cb: impl FnMut(Progress) -> (),
+	mut progress_cb: impl FnMut(Progress),
 ) -> Result<()> {
 	let mut reader = BufReader::with_capacity(CHUNK_SIZE * 2, file);
 	let mut counter: u64 = 1;
@@ -185,7 +186,8 @@ pub fn uncompress_all(
 			)
 		} else {
 			let mut reader = decoder.into_inner();
-			let _ = reader.seek(SeekFrom::Start(start));
+			// Try to seek back to the exact point where to non-gzip data started
+			drop(reader.seek(SeekFrom::Start(start)));
 			return Ok(());
 		};
 		counter += 1;
@@ -220,7 +222,7 @@ pub fn uncompress_all(
 /// [`Progress::ProgressStep`].
 pub fn list_contents(
 	file: &mut File,
-	mut progress_cb: impl FnMut(Progress) -> (),
+	mut progress_cb: impl FnMut(Progress),
 ) -> Result<Vec<FileInfo>> {
 	let length = file.metadata()?.len();
 	let mut reader = BufReader::with_capacity(CHUNK_SIZE * 2, file);
@@ -230,6 +232,7 @@ pub fn list_contents(
 	while !reader.fill_buf()?.is_empty() {
 		let start = reader.stream_position()?;
 		let mut decoder = GzDecoder::new(reader);
+		// Find header and (if possible) extract filename
 		let filename: String = if let Some(header) = decoder.header() {
 			header.filename().map_or_else(
 				|| format!("file_{}", files.len() + 1),
@@ -237,7 +240,8 @@ pub fn list_contents(
 			)
 		} else {
 			let mut reader = decoder.into_inner();
-			let _ = reader.seek(SeekFrom::Start(start));
+			// Try to seek back to the exact point where to non-gzip data started
+			drop(reader.seek(SeekFrom::Start(start)));
 			return Ok(files);
 		};
 
@@ -296,7 +300,7 @@ pub fn write_one_file(
 	info: &FileInfo,
 	output_directory: &Path,
 	overwrite: bool,
-	mut progress_cb: impl FnMut(Progress) -> (),
+	mut progress_cb: impl FnMut(Progress),
 ) -> Result<()> {
 	input.seek(SeekFrom::Start(info.start))?;
 	let filename = format!("{}.gz", info.filename.replace(['/', '\0', '\\'], "_"));
@@ -366,7 +370,7 @@ pub fn unconcatenate_files(
 	infos: &[FileInfo],
 	output_directory: &Path,
 	overwrite: bool,
-	mut progress_cb: impl FnMut(Progress) -> (),
+	mut progress_cb: impl FnMut(Progress),
 ) -> Result<()> {
 	// Try to create output directory
 	if let Err(e) = create_dir(output_directory) {
@@ -389,10 +393,10 @@ pub fn unconcatenate_files(
 	}
 
 	// Seek after the last file for correct error position information about corrupted tail data
-	// even if native sendfile was used.
+	// even if native sendfile was used. Ignore errors while seeking.
 	let len = infos.len();
 	if len > 0 {
-		let _ = input.seek(SeekFrom::Start(infos[len - 1].end));
+		drop(input.seek(SeekFrom::Start(infos[len - 1].end)));
 	}
 
 	Ok(())

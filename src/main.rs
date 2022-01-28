@@ -1,10 +1,10 @@
 //! `gunzip-split` utility to decompress concatenated gzip files back into separate files.
 
 use clap::Parser;
+use gunzip_split::{escape_cc, list_contents, uncompress_all, unconcatenate_files, Progress};
 use std::fs::File;
 use std::io::{ErrorKind, Read, Seek};
 use std::path::PathBuf;
-use gunzip_split::{escape_cc, list_contents, uncompress_all, unconcatenate_files, Progress};
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -44,9 +44,10 @@ fn process(opt: Opt) -> std::io::Result<()> {
 
 	if opt.list_only {
 		// Uncompress to /dev/null to list of files
-		list_contents(&mut gzfile, |p| match p {
-			Progress::FileBegin { name, .. } => println!("{}", escape_cc(name)),
-			_ => {}
+		list_contents(&mut gzfile, |p| {
+			if let Progress::FileBegin { name, .. } = p {
+				println!("{}", escape_cc(name))
+			}
 		})?;
 	} else if opt.split_only {
 		// Uncompress to /dev/null to get a list of all files
