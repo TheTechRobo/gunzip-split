@@ -1,11 +1,12 @@
 use flate2::bufread::GzDecoder;
+use std::borrow::Cow;
 use std::fs::{create_dir, rename, File};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 use std::path::Path;
 
 mod sendfile;
 
-pub(crate) const CHUNK_SIZE: usize = 2 * 1024 * 1024;
+pub(crate) const CHUNK_SIZE: usize = 1 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum Progress<'a> {
@@ -18,7 +19,7 @@ pub enum Progress<'a> {
 	///
 	/// Guarantees for the progress callbacks:
 	/// - passed at least once for every file that could be successfully processed
-	/// - passed shortly after an OS signal interrupted a system call.
+	/// - passed directly after an OS signal interrupted a system call.
 	ProgressStep,
 	/// Processing the current file failed, but this wasn't fatal for the whole operation
 	///
@@ -37,6 +38,34 @@ pub struct FileInfo {
 	end: u64,
 }
 
+/// Replace ASCII control characters with REPLACEMENT CHARACTER
+///
+/// They may upset terminals when used in e.g. a filename or (in the case of NL) confuse users.
+#[doc(hidden)]
+pub fn escape_cc(input: &str) -> Cow<'_, str> {
+	if input.find(|c| ('\0'..'\x1f').contains(&c)).is_some() {
+		input
+			.replace(|c| ('\0'..'\x1f').contains(&c), "\u{FFFD}")
+			.into()
+	} else {
+		input.into()
+	}
+}
+
+/// Uncompresses one file from the gzip input
+///
+/// The passed `decoder` must already be positioned at the start offset.
+///
+/// Any `/`, `\` or NUL byte in filename will be replaced with an underscore to prevent
+/// directory traversal attacks.
+///
+/// # Errors
+/// If this function encounters any form of I/O or other error except interruption by a signal,
+/// an adequate error variant will be returned. The underlying reader will be positioned near
+/// the offset where the error occured.
+///
+/// Interruption by a signal instead causes `progress_cb` to be called with
+/// [`Progress::ProgressStep`].
 pub fn uncompress_one<R: BufRead>(
 	decoder: &mut GzDecoder<R>,
 	output_directory: &Path,
@@ -54,7 +83,7 @@ pub fn uncompress_one<R: BufRead>(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists", filename),
+			format!("file {} already exists", escape_cc(&filename)),
 		));
 	}
 
@@ -70,7 +99,7 @@ pub fn uncompress_one<R: BufRead>(
 					ErrorKind::AlreadyExists => {
 						return Err(Error::new(
 							ErrorKind::AlreadyExists,
-							format!("file {} already exists", tempfile),
+							format!("file {} already exists", escape_cc(&tempfile)),
 						))
 					}
 					_ => return Err(e),
@@ -111,7 +140,7 @@ pub fn uncompress_one<R: BufRead>(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists", filename),
+			format!("file {} already exists", escape_cc(&filename)),
 		));
 	}
 	rename(outpath, finalpath)?;
@@ -119,6 +148,17 @@ pub fn uncompress_one<R: BufRead>(
 	Ok(())
 }
 
+/// Uncompresses all files from the gzip input
+///
+/// The passed `decoder` must already be positioned at the start offset.
+///
+/// # Errors
+/// If this function encounters any form of I/O or other error except interruption by a signal,
+/// an adequate error variant will be returned. The underlying reader will be positioned near
+/// the offset where the error occured.
+///
+/// Interruption by a signal instead causes `progress_cb` to be called with
+/// [`Progress::ProgressStep`].
 pub fn uncompress_all(
 	file: &mut File,
 	output_directory: &Path,
@@ -224,6 +264,19 @@ pub fn list_contents(
 	Ok(files)
 }
 
+/// Copies one gzip file from the concatenated gzip input
+///
+/// The filename will be `info.filename` with `.gz` appended. Any `/`, `\`, or NUL byte in
+/// the resulting filename will be replaced with an underscore to prevent directory traversal
+/// attacks.
+///
+/// # Errors
+/// If this function encounters any form of I/O or other error except interruption by a signal,
+/// an adequate error variant will be returned. The underlying reader will be positioned near
+/// the offset where the error occured.
+///
+/// Interruption by a signal instead causes `progress_cb` to be called with
+/// [`Progress::ProgressStep`].
 pub fn write_one_file(
 	input: &mut File,
 	info: &FileInfo,
@@ -241,7 +294,7 @@ pub fn write_one_file(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists", filename),
+			format!("file {} already exists", escape_cc(&filename)),
 		));
 	}
 
@@ -256,7 +309,7 @@ pub fn write_one_file(
 					ErrorKind::AlreadyExists => {
 						return Err(Error::new(
 							ErrorKind::AlreadyExists,
-							format!("file {} already exists", tempfile),
+							format!("file {} already exists", escape_cc(&tempfile)),
 						))
 					}
 					_ => return Err(e),
@@ -274,7 +327,7 @@ pub fn write_one_file(
 	if !overwrite && (finalpath.exists() || finalpath.is_symlink()) {
 		return Err(Error::new(
 			ErrorKind::AlreadyExists,
-			format!("file {} already exists", filename),
+			format!("file {} already exists", escape_cc(&filename)),
 		));
 	}
 	rename(outpath, finalpath)?;

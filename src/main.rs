@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{ErrorKind, Read, Seek};
 use std::path::PathBuf;
 use clap::Parser;
-use unconcat_gz::{list_contents, uncompress_all, unconcatenate_files, Progress};
+use unconcat_gz::{escape_cc, list_contents, uncompress_all, unconcatenate_files, Progress};
 
 #[derive(Parser)]
 struct Opt {
@@ -36,7 +36,7 @@ fn process(opt: Opt) -> std::io::Result<()> {
 
 		// Split according to the file list
 		unconcatenate_files(&mut gzfile, &files, &outdir, overwrite, |p| match p {
-			Progress::FileBegin { name, .. } => eprint!("{}: ", name),
+			Progress::FileBegin { name, .. } => eprint!("{}: ", escape_cc(name)),
 			Progress::FileDone { .. } => eprintln!("OK."),
 			Progress::FileFailed { error } => {
 				if error.kind() == ErrorKind::AlreadyExists {
@@ -45,11 +45,11 @@ fn process(opt: Opt) -> std::io::Result<()> {
 					eprintln!("ERROR: {}.", error);
 				}
 			}
-			_ => {}
+			Progress::ProgressStep => {}
 		})?;
 	} else {
 		uncompress_all(&mut gzfile, &outdir, overwrite, |p| match p {
-			Progress::FileBegin { name, .. } => eprint!("{}: ", name),
+			Progress::FileBegin { name, .. } => eprint!("{}: ", escape_cc(name)),
 			Progress::FileDone { .. } => eprintln!("OK."),
 			_ => {}
 		})?;
