@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/gunzip-split.svg)](https://crates.io/crates/gunzip-split)
 [![Documentation](https://docs.rs/gunzip-split/badge.svg)](https://docs.rs/gunzip-split/)
 [![License](https://img.shields.io/crates/l/gunzip-split.svg)](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
-[![Build Status](https://gitlab.com/cg909/rust-gunzip-split/badges/master/pipeline.svg)](https://gitlab.com/cg909/rust-gunzip-split/-/commits/master)
+[![Build Status](https://gitlab.com/cg909/gunzip-split/badges/master/pipeline.svg)](https://gitlab.com/cg909/gunzip-split/-/commits/master)
 
 The `gunzip-split` utility can decompress concatenated gzip files back into separate files.
 
