@@ -30,7 +30,7 @@ pub enum Progress<'a> {
 	FileDone { end: u64 },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FileInfo {
 	filename: String,
 	start: u64,
