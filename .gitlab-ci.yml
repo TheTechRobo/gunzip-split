@@ -27,6 +27,23 @@ variables:
 #   - apt-get update -yqq
 #   - apt-get install -yqq --no-install-recommends build-essential
 
+build:release:linux:
+  tags:
+    - linux
+  before_script:
+   - apt-get update -yqq
+   - apt-get install -yqq --no-install-recommends binutils
+  script:
+    - rustc --version && cargo --version  # Print version info for debugging
+    - cargo build --release --target x86_64-unknown-linux-gnu
+    - strip target/x86_64-unknown-linux-gnu/release/gunzip-split
+    - curl --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" --upload-file target/x86_64-unknown-linux-gnu/release/gunzip-split "https://gitlab.example.com/api/v4/projects/33207144/packages/generic/gunzip-split_amd64/${CI_COMMIT_TAG#v}/gunzip-split"
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_COMMIT_TAG =~ /^v[0-9]/
+
 # Use cargo to test the project
 test:cargo:
   before_script:
@@ -39,6 +56,7 @@ test:cargo:
     reports:
       junit: junit.xml
     expire_in: 1 week
+  needs: []
 
 clippy:
   stage: test
