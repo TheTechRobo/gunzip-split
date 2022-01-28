@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Christoph Grenz <christophg+gitorious@grenz-bonn.de>"]
 license = "LGPL-2.1-or-later"
+description = "Uncompress concatenated gzip files back into separate files."
+readme = "README.md"
+repository = "https://gitlab.com/cg909/gunzip-split"
+keywords = ["cli", "gzip", "gunzip", "split", "utility"]
+categories = ["command-line-utilities", "compression"]
 
 [dependencies]
 clap = { version = "3.0", features = ["std", "derive"], default-features = false }
