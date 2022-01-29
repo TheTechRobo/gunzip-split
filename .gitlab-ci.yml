@@ -37,7 +37,7 @@ build:release:linux:
     - rustc --version && cargo --version  # Print version info for debugging
     - cargo build --release --target x86_64-unknown-linux-gnu
     - strip target/x86_64-unknown-linux-gnu/release/gunzip-split
-    - 'curl --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" --upload-file target/x86_64-unknown-linux-gnu/release/gunzip-split "https://gitlab.example.com/api/v4/projects/33207144/packages/generic/gunzip-split_amd64/${CI_COMMIT_TAG#v}/gunzip-split"'
+    - 'curl --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" --upload-file target/x86_64-unknown-linux-gnu/release/gunzip-split "https://gitlab.com/api/v4/projects/33207144/packages/generic/gunzip-split_amd64/${CI_COMMIT_TAG#v}/gunzip-split"'
   only:
     refs:
       - tags
