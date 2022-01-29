@@ -27,7 +27,7 @@ struct Opt {
 	list_only: bool,
 
 	/// Output directory for deconcatenated files
-	#[clap(short, long, parse(from_os_str))]
+	#[clap(short, long, parse(from_os_str), name = "DIRECTORY")]
 	output_directory: PathBuf,
 
 	/// concatenated gzip input file
