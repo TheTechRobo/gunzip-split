@@ -1,6 +1,6 @@
 [package]
 name = "gunzip-split"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Christoph Grenz <christophg+gitorious@grenz-bonn.de>"]
 license = "LGPL-2.1-or-later"
