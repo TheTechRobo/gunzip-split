@@ -13,6 +13,10 @@ mod sendfile;
 
 pub(crate) const CHUNK_SIZE: usize = 1024 * 1024;
 
+/// Progress information
+///
+/// Used for the progress callbacks in some functions in this crate to
+/// pass status information to the calling code.
 #[derive(Debug)]
 pub enum Progress<'a> {
 	/// Processing of a file starts
