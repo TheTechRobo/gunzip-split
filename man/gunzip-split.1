@@ -1,0 +1,45 @@
+.\" generated with Ronn-NG/v0.8.0
+.\" http://github.com/apjanke/ronn-ng/tree/0.8.0
+.TH "GUNZIP\-SPLIT" "1" "January 2022" "" "gunzip-split"
+.SH "NAME"
+\fBgunzip\-split\fR \- Uncompress concatenated gzip files back into separate files
+.SH "SYNOPSIS"
+\fBgunzip\-split\fR [\fB\-d\fR|\fB\-s\fR] [\fB\-f\fR] \fB\-o\fR \fIdirectory\fR \fIfile\fR
+.br
+\fBgunzip\-split\fR \fB\-l\fR \fIfile\fR
+.SH "DESCRIPTION"
+\fBgunzip\-split\fR decompresses a concatenated gzip file back into separate files\. When used with \fB\-s\fR it splits the file into separate gzip files\. The input file is always kept\.
+.SH "OPTIONS"
+.TP
+\fB\-d\fR, \fB\-\-decompress\fR
+Decompress\. This is the default\. For each gzip stream in the input \fIfile\fR a corresponding expanded file in \fIdirectory\fR is created\. The original file name \- if found in the gzip metadata \- is restored\. If no file name is found, "file_\fBn\fR" with an incrementing counter \fBn\fR is used instead\.
+.TP
+\fB\-s\fR, \fB\-\-split\-only\fR
+Split without decompressing\. For each gzip stream in the input \fIfile\fR a corresponding file in \fIdirectory\fR is created\. The original file name \- if found in the gzip metadata \- with a \.gz suffix is used\. If no file name is found, "file_\fBn\fR\.gz" with an incrementing counter \fBn\fR is used instead\.
+.TP
+\fB\-l\fR, \fB\-\-list\-only\fR
+List content files\. For each gzip stream in the input \fIfile\fR a line containing the original file name (or "file_\fBn\fR) is printed to standard output\.
+.TP
+\fB\-f\fR, \fB\-\-force\fR
+Force writing the output files even if a corresponding file already exists\. Without this option no files are overwritten\.
+.TP
+\fB\-o\fR, \fB\-\-output\-directory\fR \fIdirectory\fR
+Output directory for decompressed/deconcatenated files\. It will be created if it doesn\'t exist\.
+.TP
+\fB\-V\fR
+Print version information
+.TP
+\fB\-h\fR
+Print help information
+.SH "EXIT STATUS"
+\fBgunzip\-split\fR normally exits with status 0\. It exits with status 1 if a fatal error occured that prevented the operation from completing (e\.g\. non\-writable output directory, corrupted archive while decompressing)\. The exit status is 2 if required arguments were not provided or conflicting options were set\.
+.SH "AUTHOR"
+Written by Christoph Grenz [christophg at grenz\-bonn\.de]\.
+.SH "COPYRIGHT"
+Copyright 2022 Christoph Grenz\.
+.P
+License: GNU LGPL version 2\.1 or later <\fI\%https://www\.gnu\.org/licenses/old\-licenses/lgpl\-2\.1\.html\fR>\.
+.P
+This is free software: you are free to change and redistribute it\. There is NO WARRANTY, to the extent permitted by law\.
+.SH "SEE ALSO"
+gzip(1)
