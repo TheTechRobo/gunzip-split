@@ -27,8 +27,8 @@ struct Opt {
 	list_only: bool,
 
 	/// Output directory for deconcatenated files
-	#[clap(short, long, parse(from_os_str), name = "DIRECTORY")]
-	output_directory: PathBuf,
+	#[clap(short, long, parse(from_os_str), name = "DIRECTORY", required_unless_present("list-only"))]
+	output_directory: Option<PathBuf>,
 
 	/// concatenated gzip input file
 	#[clap(name = "FILE", parse(from_os_str))]
@@ -54,7 +54,7 @@ fn process(opt: Opt) -> std::io::Result<()> {
 		let files = list_contents(&mut gzfile, |_| {})?;
 
 		// Split according to the file list
-		unconcatenate_files(&mut gzfile, &files, &outdir, overwrite, |p| match p {
+		unconcatenate_files(&mut gzfile, &files, &outdir.unwrap(), overwrite, |p| match p {
 			Progress::FileBegin { name, .. } => eprint!("{}: ", escape_cc(name)),
 			Progress::FileDone { .. } => eprintln!("OK."),
 			Progress::FileFailed { error } => {
@@ -67,7 +67,7 @@ fn process(opt: Opt) -> std::io::Result<()> {
 			Progress::ProgressStep => {}
 		})?;
 	} else {
-		uncompress_all(&mut gzfile, &outdir, overwrite, |p| match p {
+		uncompress_all(&mut gzfile, &outdir.unwrap(), overwrite, |p| match p {
 			Progress::FileBegin { name, .. } => eprint!("{}: ", escape_cc(name)),
 			Progress::FileDone { .. } => eprintln!("OK."),
 			_ => {}
