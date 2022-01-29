@@ -16,3 +16,15 @@ flate2 = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2", default-features = false }
+
+[profile.dev.package.memchr]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+[profile.dev.package.adler]
+opt-level = 3
