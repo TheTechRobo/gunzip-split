@@ -183,11 +183,8 @@ pub fn uncompress_all(
 	while !reader.fill_buf()?.is_empty() {
 		let start = reader.stream_position()?;
 		let mut decoder = GzDecoder::new(reader);
-		let filename: String = if let Some(header) = decoder.header() {
-			header.filename().map_or_else(
-				|| format!("file_{}", counter),
-				|bytes| String::from_utf8_lossy(bytes).into(),
-			)
+		let filename: String = if let Some(_header) = decoder.header() {
+			format!("file_{}", counter)
 		} else {
 			let mut reader = decoder.into_inner();
 			// Try to seek back to the exact point where to non-gzip data started
@@ -238,10 +235,7 @@ pub fn list_contents(
 		let mut decoder = GzDecoder::new(reader);
 		// Find header and (if possible) extract filename
 		let filename: String = if let Some(header) = decoder.header() {
-			header.filename().map_or_else(
-				|| format!("file_{}", files.len() + 1),
-				|bytes| String::from_utf8_lossy(bytes).into(),
-			)
+			format!("file_{}", files.len() + 1)
 		} else {
 			let mut reader = decoder.into_inner();
 			// Try to seek back to the exact point where to non-gzip data started
